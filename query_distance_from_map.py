@@ -1,10 +1,7 @@
 import pandas as pd
 import requests
-import json
 import time
-import sys
 import warnings
-from openpyxl import load_workbook
 from api_key import BAIDU_MAP_AK
 
 # 忽略Pandas的版本警告
