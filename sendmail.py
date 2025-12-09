@@ -1,12 +1,13 @@
 # -*- coding: utf-8 -*-
 import os
 import smtplib
+import time  # 注意：你原来在 if __name__ == "__main__" 里 import time，建议移到顶部
 from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
 from email.mime.text import MIMEText
 from email.utils import formataddr, COMMASPACE
 from email import encoders
-from mail_config import SMTP_SERVER, SMTP_PORT, USERNAME, PASSWORD
+from api_key import SMTP_SERVER, SMTP_PORT, USERNAME, PASSWORD, RECIPIENTS  # ← 新增导入 RECIPIENTS
 
 
 def get_latest_data_file():
@@ -36,7 +37,6 @@ def get_latest_data_file():
         print(f"获取最新文件失败: {str(e)}")
         return None
 
-
 def send_email_with_attachment(file_path):
     """发送带附件的邮件（修正MIME类型问题）"""
     try:
@@ -53,9 +53,7 @@ def send_email_with_attachment(file_path):
         # 创建邮件对象
         msg = MIMEMultipart()
         msg["From"] = formataddr(("机器牛马", USERNAME))
-        # msg["To"] = COMMASPACE.join(["patrick_wu_fudan@163.com","657267701@qq.com"])
-        msg["To"] = COMMASPACE.join(["657267701@qq.com"])
-
+        msg["To"] = COMMASPACE.join(RECIPIENTS)  # ← 使用从 api_key 导入的收件人列表
         msg["Subject"] = f"链家租房数据 - {file_name}"
 
         # 添加正文
@@ -67,25 +65,26 @@ def send_email_with_attachment(file_path):
             "plain", "utf-8"
         ))
 
-        # 修正部分：添加附件（明确指定MIME类型）
+        # 添加附件
         with open(file_path, "rb") as attachment:
             part = MIMEBase("application", "vnd.openxmlformats-officedocument.spreadsheetml.sheet")
             part.set_payload(attachment.read())
 
         encoders.encode_base64(part)
 
-        # 关键修正：设置完整的Content-Disposition头
+        # 处理中文文件名（使用 gb2312 或 utf-8，但多数邮件客户端接受 utf-8）
+        # 更稳妥的方式：使用 RFC 2231 编码（email.utils 会自动处理）
+        # 简化写法（推荐）：
+        part.add_header(
+            "Content-Disposition",
+            f'attachment; filename="{file_name}"'
+        )
+        # 如果文件名含中文，建议使用以下方式（兼容性更好）：
+        from email.header import Header
         part.add_header(
             "Content-Disposition",
             "attachment",
-            filename=("gbk", "", file_name)  # 处理中文文件名
-        )
-
-        # 添加MIME类型头
-        part.add_header(
-            "Content-Type",
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            name=("gbk", "", file_name)
+            filename=Header(file_name, 'utf-8').encode()
         )
 
         msg.attach(part)
@@ -93,7 +92,7 @@ def send_email_with_attachment(file_path):
         # 发送邮件
         with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT, timeout=30) as server:
             server.login(USERNAME, PASSWORD)
-            server.sendmail(USERNAME, ["657267701@qq.com"], msg.as_string())
+            server.sendmail(USERNAME, RECIPIENTS, msg.as_string())  # ← 收件人列表
 
         print(f"邮件发送成功！附件：{file_name}")
         return True
